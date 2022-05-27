@@ -1,0 +1,199 @@
+---
+title: "DATA622 Homework 4"
+author: "Irene Jacob"
+output: html_document
+---
+
+# Goal
+
+1. You get to decide which dataset you want to work on. The data set must be different from the ones used in previous homeworks You can work on a problem from your job, or something you are interested in. You may also obtain a dataset from sites such as Kaggle, data.gov, Census Bureau, USGS or other open data portals. 
+
+2. Select one of the methodologies studied in weeks 1-10, and one methodology from weeks 11-15 to apply in the new dataset selected. 
+
+3. To complete this task:. 
+    
+    Describe the problem you are trying to solve.
+    
+    Describe your datases and what you did to prepare the data for analysis.
+    
+    Methodologies you used for analyzing the data
+    
+    What's the purpose of the analysis performed 
+    
+    Make your conclusions from your analysis. Please be sure to address the business impact (it could be of any domain) of your solution.
+
+4. Your final presentation could be the traditional R file or Python file and essay, or it could be an oral presentation with the execution and explanation of your code, recorded on any platform of your choice (Youtube, Free Cam). If you select the presentation, it should be a 5 to 8 minutes recording. 
+
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+
+library(caret)
+library(tidyverse)
+library(party)
+library(dplyr)
+library(skimr)
+library(cluster)
+library(factoextra)
+library(gridExtra)
+
+```
+
+## Problem Definition
+
+1. For the first case (KNN) I am using the Pima Indians Diabetes Dataset I got from kaggle. This dataset can be accessed using the below link.
+
+    https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database 
+
+The objective of the dataset is to predict whether or not a patient has diabetes, based on certain diagnostic measurements included in the dataset. The dataset consists of 8 predictor variables and one target variable, `Outcome`.
+
+2. For the second case (Clustering) I was not able to use the same dataset as there was a lot overlappings so I decided to use a simple dataset available in the textbook, `Wiley Practical Machine Learning in R`. This is the mallcustomers dataset. It can be downloaded from the below link.
+
+    https://www.wiley.com/en-kr/Practical+Machine+Learning+in+R-p-9781119591511#downloads-section 
+    
+This dataset consists of 200 shopping mall customers. Each customer record consists of a unique identifier `CustomerID`, `Gender`, `Age`, `Income`, and `SpendingScore`, between 1 and 100,based on the customer’s purchase habits and several other factors. The goal here is to segment customers based on `Income` and `SpendingScore.`
+   
+## Loading the datasets
+
+The diabetes dataset is loaded into `df1` and the mall customers dataset is loaded into `df2` using `read.csv()`.
+
+```{r}
+
+df1 <- read.csv("diabetes.csv")
+head(df1)
+skim(df1)
+
+```
+
+```{r}
+
+df1 %>% gather() %>% ggplot(aes(value)) + geom_histogram() + facet_wrap(~ key, scales = "free", ncol = 3)
+
+```
+
+```{r}
+
+df2 <- read.csv("mallcustomers.csv")
+head(df2)
+skim(df2)
+
+```
+
+## 1. KNN
+
+First I am going to do KNN modeling. From the skim output it is clear that all the variables are numeric and there are a total of 768 records in this dataset. There are no missing values so I am proceeding with splitting this dataset into train and test sets. 
+
+I am removing the target variable from train and test sets.
+
+```{r}
+
+set.seed(101)
+
+i <- sample(nrow(df1), round(nrow(df1)*.75), replace = FALSE)
+
+df1_train <- df1[i, ]
+df1_test <- df1[-i, ]
+
+x <- as.factor(pull(df1_train, Outcome))
+y <- as.factor(pull(df1_test, Outcome))
+
+df1_train <- data.frame(select(df1_train, -Outcome))
+df1_test <- data.frame(select(df1_test, -Outcome))
+
+```
+
+Now lets go ahead with the KNN model. The result of this is stored in `knnmodel`
+
+```{r warning=FALSE}
+
+library(class)
+
+knnmodel <- knn(df1_train,df1_test,cl=x,k=5)
+
+```
+
+Below is the confusionMatrix output of this model. It is observed that the accuracy of this model is 74%. This is not perfect but good enough.
+
+```{r}
+
+confusionMatrix(table(y, knnmodel))
+
+```
+
+
+## 2. Clustering
+
+Next I am choosing to do Clustering which is part of the second half of this course. From the skim result below it is observed that there are 4 numeric and 1 character type variables. There are no missing values either. 
+
+```{r}
+
+library(stringr)
+df2 <- df2 %>%
+  mutate(Income = str_replace_all(Income," USD","")) %>%
+  mutate(Income = str_replace_all(Income,",","")) %>%
+  mutate(Income = as.numeric(Income))
+
+skim(df2)
+
+```
+
+Removing all the unnecessary columns(`CustomerID`, `Gender`, `Age`).
+
+Now there are 2 numeric variables and no missing values. The dataset is not ready for clustering. 
+
+```{r}
+
+df2 <- df2 %>%
+  select(-CustomerID, -Gender, -Age) %>% scale()
+
+skim(df2)
+
+```
+
+First, need to identify the optimal k using the elbow, siklhouette and gap statistic methods.
+
+The WCSS of a cluster is the sum of the distances between the items in the cluster and the cluster centroid. At some point in the curve, a visible bend occurs that represents the point at which increasing the value for k no longer yields a significant reduction in WCSS. This point is known as the elbow, and the k value at this point is usually expected to be the appropriate number of clusters for the dataset. This technique of using the elbow of the WCSS curve to determine the right number of clusters is known as the elbow method.
+
+The average silhouette method computes the average silhouette of all items in the dataset based on different values for k. The silhouette of an item is a measure of how closely the item is matched with other items within the same cluster and how loosely it is with items in neighboring clusters. A silhouette value close to 1 implies that an item is the right cluster, while a silhouette value close to –1 implies that it is in the wrong cluster. The k value corresponding to the highest average silhouette represents the optimal number of clusters.
+
+For a given k, the gap statistic is the difference in the total WCSS for the observed data and that of the reference dataset. The optimal number of clusters is denoted by the k value that yields the largest gap statistic.
+
+Using fviz_nbclust(), the recommended value for k is obtained based on all three methods.
+
+```{r}
+
+# Elbow Method
+a <- fviz_nbclust(df2, kmeans, method = "wss") + geom_point( shape = 1, x = 6, y = 60, colour = "red", size = 8, stroke = 1.5) + ggtitle("Elbow Method")
+
+# Silhouette Method
+b <- fviz_nbclust(df2, kmeans, method = "silhouette") + geom_point( shape = 1, x = 6, y = 0.53, colour = "red", size = 8, stroke = 1.5) + ggtitle("Silhouette Method")
+
+# Gap Statistic
+c <- fviz_nbclust(df2, kmeans, method = "gap_stat") + geom_point( shape = 1, x = 6, y = 0.57, colour = "red", size = 8, stroke = 1.5) + ggtitle("Gap Statistic")
+
+```
+
+```{r fig.height=7, fig.width=7}
+
+grid.arrange(a, b, c)
+
+```
+
+All three statistical methods for determining the optimal number of clusters recommend k = 6.
+
+So now I am going to create the final set of clusters with k=6 and visualize the results to see which cluster each of the mall customers belongs to.
+
+```{r fig.height=8, fig.width=10}
+
+# We set the value for k to 6 and choose to use 25 different initial configurations.
+set.seed(1234)
+k_clust <- kmeans(df2, centers = 6, nstart = 25)
+
+fviz_cluster( k_clust, data = df2, main = "Mall Customers Segmented by Income and Spending Score", repel = TRUE, ggtheme = theme_minimal()) + theme(text = element_text(size = 14))
+
+```
+
+## Conclusion
+
+The k value plays an important role in the performance of KNN model and it is the key tuning parameter of kNN algorithm. Based on the confusionMatrix output of KNN model, it is observed that the accuracy of this model is 74%. This is not perfect but good enough.
+
+Based on the output of cluster visualization it can, be seen that the customers in cluster 1 and cluster 2 have above average spending scores and above average income which suggests that they earn more and spend more.  The customers in cluster 3 are also high earners, but they have below average spending scores which suggests that they earn more but spend less. Cluster 4 represents lower-earning and lower-spending customers, while cluster 5 represents the average customer with average income and average spending score. The customers in cluster 6 are customers with above average spending but below average income.
+

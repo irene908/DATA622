@@ -1,0 +1,192 @@
+---
+title: "DATA622 Homework 1"
+author: "Irene Jacob"
+output: html_document
+---
+
+# Goal
+
+Visit the following website and explore the range of sizes of this dataset (from 100 to 5 million records).
+
+https://eforexcel.com/wp/downloads-18-sample-csv-files-data-sets-for-testing-sales/ 
+
+  1. Based on your computer's capabilities (memory, CPU), select 2 files you can handle (recommended one small, one large)
+
+  2. Review the structure and content of the tables, and think which two machine learning algorithms presented so far could be used to analyze the data, and how can they be applied in the suggested environment of the datasets.
+  
+  3. Write a short essay explaining your selection. Then, select one of the 2 algorithms and explore how to analyze and predict an outcome based on the data available. This will be an exploratory exercise, so feel free to show errors and warnings that raise during the analysis. Test the code with both datasets selected and compare the results. 
+  
+  4. Which result will you trust if you need to make a business decision? Do you think an analysis could be prone to errors when using too much data, or when using the least amount possible?
+
+
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+
+library(tidyverse)
+library(party)
+library(dplyr)
+library(caTools)
+library(randomForest)
+library(mapview)
+library(rpart)
+library(rpart.plot) 
+library(lubridate)
+
+```
+
+
+### 1. Choose 2 datasets (1 small and 1 large)
+
+For my small dataset I chose the one with 100 records and for my large dataset I chose the one with 50000 records.
+
+small dataset is loaded into `df_small` and large dataset is loaded into `df_large`
+
+```{r load_data}
+
+df_small <- read.csv("100 Sales Records.csv")
+df_large <- read.csv("50000 Sales Records.csv")
+
+```
+
+### 2. Review the loaded data
+
+```{r summary1}
+
+summary(df_small)
+summary(df_large)
+
+```
+
+From the summary statistics it is observed that both the datasets have the same 14 variables. There are 7 numeric variables and 7 character variables. Out of the 7 character variables 2 are date so I will be making those as date variables below. There does not seem to be any missing values.  
+
+```{r date}
+
+df_small$Order.Date <- mdy(df_small$Order.Date)
+df_large$Order.Date <- mdy(df_large$Order.Date)
+
+df_small$Ship.Date <- mdy(df_small$Ship.Date)
+df_large$Ship.Date <- mdy(df_large$Ship.Date)
+
+```
+
+Now lets see the summary again
+
+```{r summary2}
+
+summary(df_small)
+summary(df_large)
+
+```
+
+Now it can be seen that both the datasets have data from 2010 till 2017
+
+I will be choosing `Order.Priority` as my target variable. When a new order comes in my model should be able to identify the right priority for this. There are 4 different priorities present throughout the dataset. 
+
+The variables that could affect the target variable `Order.Priority` are `Item.Type` , `Total.Revenue` and `Units.Sold`.
+
+### 3. Short essay on algorithm selection
+
+The target variable is categorical, so the number of potential algorithms is less. KNN algorithm could be used as it does not make any assumptions about the distribution of data. Its predictions are based on the k most similar training patterns for a new instance of data. This is a good choice as there are no missing data in the dataset and knn algorithm cannot handle missing data. But knn algorithm make have a tough time with outliers so I am choosing not to go ahead with this.
+
+My next option is decision trees. Decision trees can handle outliers and work well on categorical data. Here there is a small and a large dataset and this does not affect decision tree in anyway. Just like knn, decision trees do not make assumptions.
+
+I am going to make the decision tree model for small dataset first followed by the large dataset.
+
+*Small Dataset (100 records)*
+
+Below I will make 4 of the 7 character variables as factor. Following that I will split the dataset into train and test set in the ratio 75:25. 
+
+```{r split_small}
+
+set.seed(123)
+
+df_small$Region <- as.factor(df_small$Region)
+df_small$Item.Type <- as.factor(df_small$Item.Type)
+df_small$Sales.Channel <- as.factor(df_small$Sales.Channel)
+df_small$Order.Priority <- as.factor(df_small$Order.Priority)
+
+df_sample <- sample(nrow(df_small), round(nrow(df_small)*0.75), replace = FALSE)
+small_train <- df_small[df_sample, ]
+small_test <- df_small[-df_sample, ]
+
+```
+
+Using `rpart` package I am going to build and plot the model.
+
+```{r small_model}
+
+small_model <- rpart(Order.Priority ~ Region + Item.Type + Sales.Channel + Order.Date + Order.ID + Ship.Date + Units.Sold + Total.Revenue + Total.Cost + Total.Profit , method = "class", data = small_train)
+
+rpart.plot(small_model)
+
+```
+
+Using the above model on the test set.
+
+```{r prediction}
+
+small_pred <- predict(small_model, small_test, type = "class")
+small_pred <- table(small_test$Order.Priority, small_pred)
+small_pred
+
+```
+
+Accuracy of the model.
+
+```{r accuracy}
+
+sum(diag(small_pred)) / nrow(small_test)
+
+```
+
+*Large Dataset (50000 records)*
+
+Just like the small dataset, here also I will make 4 of the 7 character variables as factor. Following that I will split the dataset into train and test set in the ratio 75:25.
+
+```{r split_large}
+
+set.seed(456)
+
+df_large$Region <- as.factor(df_large$Region)
+df_large$Item.Type <- as.factor(df_large$Item.Type)
+df_large$Sales.Channel <- as.factor(df_large$Sales.Channel)
+df_large$Order.Priority <- as.factor(df_large$Order.Priority)
+
+df_sample <- sample(nrow(df_large), round(nrow(df_large)*0.75), replace = FALSE)
+large_train <- df_large[df_sample, ]
+large_test <- df_large[-df_sample, ]
+
+```
+
+Using `rpart` package I am going to build and plot the model.
+
+```{r large_model}
+
+large_model <- rpart(Order.Priority ~ Region + Item.Type + Sales.Channel + Order.Date + Order.ID + Ship.Date + Units.Sold + Total.Revenue + Total.Cost + Total.Profit , method = "class", data = large_train,control=rpart.control(minsplit=2, minbucket=3, cp=0.001))
+
+rpart.plot(large_model)
+
+```
+
+Using the above model on the test set.
+
+```{r prediction1}
+
+large_pred <- predict(large_model, large_test, type = "class")
+large_pred <- table(large_test$Order.Priority, large_pred)
+large_pred
+
+```
+
+Accuracy of the model.
+
+```{r accuracy1}
+
+sum(diag(large_pred)) / nrow(large_test)
+
+```
+
+### 4. Analysis of the result
+
+The accuracy for the small dataset is 44% whereas the accuracy for the large dataset is roughly 25%. These are not that great results but what I noticed is that the accuracy for small datasets are way better than large ones. The large datasets almost crashed my PC.`control=rpart.control(minsplit=2, minbucket=3, cp=0.001` saved me here. 
+
+But based on my findings here I do not recommend both these to make a business decision. When using too much data errors tend to increase but that could mean I need to use an algorithm that can handle the errors better.

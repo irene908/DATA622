@@ -1,0 +1,115 @@
+---
+title: "DATA622 Homework 3"
+author: "Irene Jacob"
+output: html_document
+---
+
+# Goal
+
+  1. Perform an analysis of the dataset used in Homework #2 using the SVM algorithm.Compare the results with the results from previous homework.
+
+  2. Based on articles
+  
+    https://www.hindawi.com/journals/complexity/2021/5550344/ 
+    
+    https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8137961/ 
+    
+Search for academic content (at least 3 articles) that compare the use of decision trees vs SVMs in your current area of expertise.
+  
+  3. Which algorithm is recommended to get more accurate results? Is it better for classification or regression scenarios? Do you agree with the recommendations? Why?
+  
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+
+library(caret)
+library(tidyverse)
+library(party)
+library(dplyr)
+library(caTools)
+library(randomForest)
+library(mapview)
+library(rpart)
+library(rpart.plot) 
+library(lubridate)
+library(skimr)
+library('e1071')
+library(Metrics)
+
+```
+
+### 1. SVM model
+
+For the previous homework I decided to use the heart failure dataset available in kaggle that is available in the below link
+https://www.kaggle.com/datasets/fedesoriano/heart-failure-prediction?resource=download .
+
+This dataset contains 918 observations and 12 variables. I am choosing `HeartDisease` as my target variable. This variable takes values 0 and 1 which corresponds to not having heartdisease and having the diease respectively.
+
+7 out of the 12 variables are numeric which includes my target variable. For the purpose of this homework I am changing the target variable datatype as factor.
+
+```{r load_data}
+
+df <- read.csv("heart.csv", colClasses = c("numeric", "factor", "factor","numeric", "numeric", "numeric","factor", "numeric", "factor","numeric", "factor","factor"))
+head(df)
+
+```
+
+Below is the skim view of the dataset and it is seen that there are no missing values.
+
+```{r summary}
+
+skim(df)
+
+```
+
+To move forward I am splitting the dataset into train and test set in the ratio 75:25
+
+```{r split_data}
+
+set.seed(111)
+df.sample <- sample(nrow(df), round(nrow(df)*0.75), replace = FALSE)
+df.train <- df[df.sample, ]
+df.test <- df[-df.sample, ]
+
+```
+
+After splitting checking if each set has both the entries in the target
+
+```{r proportion}
+
+round(prop.table(table(select(df.train, HeartDisease), exclude = NULL)), 4) * 100
+
+round(prop.table(table(select(df.test, HeartDisease), exclude = NULL)), 4) * 100
+
+```
+
+```{r}
+
+svm <- svm(HeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingECG + MaxHR, data = df.train, kernel="polynomial", scale=FALSE)
+svm
+
+```
+
+```{r}
+
+pred <- predict(svm, newdata=df.test)
+confusionMatrix(pred, df.test$HeartDisease)
+
+```
+
+### 2. Compare decision trees and SVMs
+
+The below study states that *"the classification accuracy of SVM algorithm was better than DT algorithm"*. 
+
+    https://scialert.net/fulltext/?doi=itj.2009.64.70 
+
+
+The below article talks about *"how these algorithms can be used in both classification and regression problems with examples of a regression problem.."*
+
+    https://towardsdatascience.com/a-complete-view-of-decision-trees-and-svm-in-machine-learning-f9f3d19a337b 
+    
+The below article explains basics of both these algorithms with pictorial representations.
+
+    https://www.numpyninja.com/post/a-simple-introduction-to-decision-tree-and-support-vector-machines-svm
+    
+### 3. Conclusion
+
+For this dataset the SVM model accuracy was around 63% but when I used `polynomial` as the kernel parameter the accuracy increased to 74% but the random forest model accuracy of 87% still remains better. So in this case random forest seems to be a better model than SVM. 

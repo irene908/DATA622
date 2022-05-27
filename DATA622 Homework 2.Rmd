@@ -1,0 +1,133 @@
+---
+title: "DATA622 Homework 2"
+author: "Irene Jacob"
+output: html_document
+---
+
+# Goal
+
+  1. Based on the latest topics presented, bring a dataset of your choice and create a Decision Tree where you can solve a classification or regression problem and predict the outcome of a particular feature or detail of the data used.
+
+  2. Switch variables to generate 2 decision trees and compare the results. Create a random forest for regression and analyze the results.
+  
+  3. Based on real cases where desicion trees went wrong, and 'the bad & ugly' aspects of decision trees (https://decizone.com/blog/the-good-the-bad-the-ugly-of-using-decision-trees), how can you change this perception when using the decision tree you created to solve a real problem?
+  
+  4. Format: document with screen captures & analysis.
+  
+```{r, echo=FALSE, warning=FALSE, include=FALSE}
+
+library(caret)
+library(tidyverse)
+library(party)
+library(dplyr)
+library(caTools)
+library(randomForest)
+library(mapview)
+library(rpart)
+library(rpart.plot) 
+library(lubridate)
+library(skimr)
+
+```
+
+### 1. Choose dataset and Split the dataset
+
+For this homework I decided to use the heart failure dataset available in kaggle that is available in the below link
+https://www.kaggle.com/datasets/fedesoriano/heart-failure-prediction?resource=download .
+
+This dataset contains 918 observations and 12 variables. I am choosing `HeartDisease` as my target variable. This variable takes values 0 and 1 which corresponds to not having heartdisease and having the diease respectively.
+
+7 out of the 12 variables are numeric which includes my target variable. For the purpose of this homework I am changing the target variable datatype as factor.
+
+```{r load_data}
+
+df <- read.csv("heart.csv", colClasses = c("numeric", "factor", "factor","numeric", "numeric", "numeric","factor", "numeric", "factor","numeric", "factor","factor"))
+head(df)
+
+```
+
+Below is the skim view of the dataset and it is seen that there are no missing values.
+
+```{r summary}
+
+skim(df)
+
+```
+
+To move forward I am splitting the dataset into train and test set in the ratio 75:25
+
+```{r split_data}
+
+set.seed(101)
+df.sample <- sample(nrow(df), round(nrow(df)*0.75), replace = FALSE)
+df.train <- df[df.sample, ]
+df.test <- df[-df.sample, ]
+
+```
+
+After splitting checking if each set has both the entries in the target
+
+```{r proportion}
+
+round(prop.table(table(select(df.train, HeartDisease), exclude = NULL)), 4) * 100
+
+round(prop.table(table(select(df.test, HeartDisease), exclude = NULL)), 4) * 100
+
+```
+
+### 2. Build 2 decision trees
+
+To build decision trees first I will use all the variables available.
+
+```{r model1}
+
+df.m1 <- rpart(HeartDisease ~ ., method = "class", data = df.train)
+
+rpart.plot(df.m1)
+
+df.m1.pred <- predict(df.m1, df.test)
+
+```
+
+For the second decision tree I will will use few of the variables that I think are more relevant to the prediction than the rest.
+
+I am using the following variables:
+
+  Age + Sex + ChestPainType + RestingBP + RestingECG + MaxHR
+
+```{r model2}
+
+df.m2 <- rpart(HeartDisease ~ Age + Sex + ChestPainType + RestingBP + RestingECG + MaxHR, method = "class", data = df.train)
+
+rpart.plot(df.m2)
+
+```
+
+From both these models it can be concluded that most of the cases where the `HeartDisease` was 1 , the corresponding `ChestPainType` FALSE and `Sex` was Male which is quite interesting. 
+
+
+### 3. Random Forest
+
+Here I am creating a RandomForest using all the variables in the dataset to predict `HeartDisease`.
+
+```{r randomF}
+
+df.randomforest <- randomForest(HeartDisease ~ ., data = df.train)
+
+df.RF.pred <- predict(df.randomforest, df.test)
+
+```
+
+Lets have a look at the confusion Matrix for this prediction below.
+
+```{r randomConfuse}
+
+confusionMatrix(df.RF.pred, df.test$HeartDisease)
+
+```
+
+The accuracy of this prediction is 87% which is pretty good. 
+
+### 4. Conclusion based on the article
+
+Based the dataset i have chosen and after reading the article I feel that decision tree is not the best prediction method here. RandomForest show more accuracy (87%) which is better here. 
